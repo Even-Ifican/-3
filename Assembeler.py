@@ -14,12 +14,11 @@ A_FIELD = (0, 5)
 
 
 class AsmError(Exception):
-    """Ошибка ассемблирования."""
+
 
 
 @dataclass
 class Instruction:
-
     mnemonic: str
     a: int
     b: int
@@ -63,7 +62,6 @@ def parse_source(path: str) -> list:
 
 
 def encode(instr: Instruction) -> bytes:
-
     _, _, fields = COMMANDS[instr.mnemonic]
     word = instr.a << A_FIELD[0]
     word |= instr.b << fields["B"][0]
@@ -71,12 +69,12 @@ def encode(instr: Instruction) -> bytes:
     return word.to_bytes(instr.size, "little")
 
 
+def translate(program: list) -> list:
+    return [encode(instr) for instr in program]
+
+
 def assemble(program: list) -> bytes:
-    return b"".join(encode(i) for i in program)
-
-
-def format_fields(instr: Instruction) -> str:
-    return f"A={instr.a}, B={instr.b}, C={instr.c}"
+    return b"".join(translate(program))
 
 
 def format_bytes(data: bytes) -> str:
@@ -88,23 +86,22 @@ def main(argv=None) -> int:
     parser.add_argument("source", help="путь к исходному файлу (CSV)")
     parser.add_argument("output", help="путь к двоичному файлу-результату")
     parser.add_argument("--test", action="store_true",
-                        help="режим тестирования: вывести внутреннее представление")
+                        help="режим тестирования: вывести машинный код в байтовом формате")
     args = parser.parse_args(argv)
 
     try:
         program = parse_source(args.source)
+        machine = translate(program)
+        with open(args.output, "wb") as f:
+            f.write(b"".join(machine))
     except (AsmError, OSError) as e:
         print(f"Ошибка: {e}", file=sys.stderr)
         return 1
 
-    binary = assemble(program)
-    with open(args.output, "wb") as f:
-        f.write(binary)
-
+    print(f"Ассемблировано команд: {len(machine)}")
     if args.test:
-        for instr in program:
-            print(f"{instr.mnemonic}: {format_fields(instr)}")
-            print(f"  байты: {format_bytes(encode(instr))}")
+        for code in machine:
+            print(format_bytes(code))
     return 0
 
 
