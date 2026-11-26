@@ -10,6 +10,7 @@ from intepretator import MEM_SIZE, VM, VMError, main, parse_range
 
 
 def build(rows):
+    """Собрать программу из списка (мнемоника, B, C) в машинный код."""
     program = []
     for name, b, c in rows:
         opcode, size, _ = Assembeler.COMMANDS[name]
@@ -101,6 +102,43 @@ class CopyArrayTest(unittest.TestCase):
                      for c in root.iter("cell")]
             self.assertEqual(cells, [(300, 11), (301, 22), (302, 33),
                                      (303, 44), (304, 55)])
+
+
+class SqrtTests(unittest.TestCase):
+    def test_decode_spec_sqrt(self):
+        vm = VM(bytes([0xF2, 0x67, 0x02, 0x00]))
+        ins = vm.fetch()
+        self.assertEqual((ins.mnemonic, ins.a, ins.b, ins.c), ("SQRT", 18, 7, 615))
+
+    def test_sqrt_to_memory(self):
+        vm = VM(build([("LOAD", 7, 81), ("SQRT", 7, 300)]))
+        vm.run()
+        self.assertEqual(vm.memory[300], 9)
+        self.assertEqual(vm.registers[7], 81)     # операнд не изменился
+
+    def test_sqrt_floor(self):
+        vm = VM(build([("LOAD", 0, 99), ("SQRT", 0, 300)]))
+        vm.run()
+        self.assertEqual(vm.memory[300], 9)
+
+    def test_sqrt_program_file(self):
+        program = Assembeler.parse_source("examples/sqrt_test.csv")
+        vm = VM(Assembeler.assemble(program))
+        vm.run()
+        self.assertEqual(vm.memory[200:206], [12, 1000, 25, 0, 1, 5792])
+        self.assertEqual(vm.executed, 12)
+
+    def test_cli_sqrt_dump(self):
+        with tempfile.TemporaryDirectory() as d:
+            binary = os.path.join(d, "sqrt.bin")
+            dump = os.path.join(d, "dump.xml")
+            with redirect_stdout(StringIO()):
+                Assembeler.main(["examples/sqrt_test.csv", binary])
+            with redirect_stdout(StringIO()):
+                rc = main([binary, dump, "200:206"])
+            self.assertEqual(rc, 0)
+            values = [int(c.get("value")) for c in ET.parse(dump).getroot().iter("cell")]
+            self.assertEqual(values, [12, 1000, 25, 0, 1, 5792])
 
 
 if __name__ == "__main__":

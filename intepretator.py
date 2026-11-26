@@ -1,4 +1,5 @@
 import argparse
+import math
 import sys
 import xml.etree.ElementTree as ET
 
@@ -13,7 +14,7 @@ OPCODES = {opcode: name for name, (opcode, _, _) in COMMANDS.items()}
 
 
 class VMError(Exception):
-
+    """Ошибка выполнения программы."""
 
 
 class VM:
@@ -28,7 +29,6 @@ class VM:
         self.pc = 0
         self.executed = 0
 
-
     def _check_addr(self, addr: int) -> None:
         if not 0 <= addr < MEM_SIZE:
             raise VMError(f"адрес {addr} вне памяти (0..{MEM_SIZE - 1})")
@@ -41,9 +41,7 @@ class VM:
         self._check_addr(addr)
         self.memory[addr] = value & WORD_MASK
 
-
     def fetch(self) -> Instruction:
-
         a = self.memory[self.pc] & ((1 << A_FIELD[1]) - 1)
         if a not in OPCODES:
             raise VMError(f"адрес {self.pc}: неизвестный код операции A={a}")
@@ -52,14 +50,13 @@ class VM:
         if self.pc + size > self.code_size:
             raise VMError(f"адрес {self.pc}: команда {mnemonic} обрезана")
         word = 0
-        for i in range(size):
+        for i in range(size):                    # little-endian
             word |= (self.memory[self.pc + i] & 0xFF) << (8 * i)
         b_off, b_w = fields["B"]
         c_off, c_w = fields["C"]
         b = (word >> b_off) & ((1 << b_w) - 1)
         c = (word >> c_off) & ((1 << c_w) - 1)
         return Instruction(mnemonic, a, b, c, size)
-
 
     def execute(self, ins: Instruction) -> None:
         if ins.mnemonic == "LOAD":
@@ -68,8 +65,11 @@ class VM:
             self.registers[ins.c] = self.read_mem(ins.b)
         elif ins.mnemonic == "WRITE":
             self.write_mem(self.registers[ins.c], self.registers[ins.b])
+        elif ins.mnemonic == "SQRT":
+            # mem[C] = целая часть sqrt(reg[B])
+            self.write_mem(ins.c, math.isqrt(self.registers[ins.b]))
         else:
-            raise VMError(f"команда {ins.mnemonic} пока не реализована")
+            raise VMError(f"неизвестная команда {ins.mnemonic}")
 
     def run(self) -> None:
         while self.pc < self.code_size:
@@ -80,7 +80,6 @@ class VM:
 
 
 def parse_range(text: str) -> tuple:
-
     try:
         start_s, end_s = text.split(":")
         start, end = int(start_s, 0), int(end_s, 0)
